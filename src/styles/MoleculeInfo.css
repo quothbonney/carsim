@@ -1,8 +1,79 @@
 .molecule-info {
-  background-color: #f5f5f5;
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.panel-section {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.panel-section:last-child {
+  border-bottom: none;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background-color: var(--header-color);
+  cursor: pointer;
+  user-select: none;
+}
+
+.panel-header h4 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-color);
+  margin: 0;
+}
+
+.panel-toggle {
+  font-size: 0.8rem;
+  color: var(--text-color);
+}
+
+.panel-content {
+  padding: 1rem;
+}
+
+.properties-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.properties-table td {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-color);
+}
+
+.properties-table tr:last-child td {
+  border-bottom: none;
+}
+
+.properties-table td:first-child {
+  font-weight: 500;
+  width: 50%;
+  color: var(--text-color);
+  opacity: 0.8;
+}
+
+.structure-image {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.5rem;
+  background-color: var(--background-color);
+  border-radius: 4px;
+}
+
+.structure-image img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
 }
 
 .molecule-info h2 {

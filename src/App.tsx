@@ -24,6 +24,8 @@ function App() {
   const [serviceStatus, setServiceStatus] = useState<string>("Not started");
   const [moleculeData, setMoleculeData] = useState<MoleculeData | null>(null);
   const [smiles, setSmiles] = useState<string>("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [infoOpen, setInfoOpen] = useState(true);
 
   // Start the Python service when the app loads
   useEffect(() => {
@@ -66,12 +68,25 @@ function App() {
     }
   };
 
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  const toggleInfo = () => {
+    setInfoOpen(!infoOpen);
+  };
+
   return (
     <div className="app-container">
       <header className="app-header">
-        <h1>Molecular Viewer</h1>
+        <div className="header-left">
+          <button className="sidebar-toggle" onClick={toggleSidebar}>
+            {sidebarOpen ? "◀" : "▶"}
+          </button>
+          <h1>Molecular Viewer</h1>
+        </div>
         <div className="service-status">
-          Service Status: <span className={`status-${serviceStatus.toLowerCase()}`}>{serviceStatus}</span>
+          Service: <span className={`status-${serviceStatus.toLowerCase()}`}>{serviceStatus}</span>
           {serviceStatus !== "Running" && (
             <button onClick={startPythonService} disabled={isLoading}>
               {isLoading ? "Starting..." : "Start Service"}
@@ -81,27 +96,42 @@ function App() {
       </header>
 
       <main className="app-content">
-        <div className="left-panel">
-          <MoleculeControls
-            smiles={smiles}
-            setSmiles={setSmiles}
-            onProcess={processMolecule}
-            isLoading={isLoading}
-          />
-          {moleculeData && (
-            <MoleculeInfo
-              properties={moleculeData.properties}
-              imageData={moleculeData.image_data}
+        {sidebarOpen && (
+          <div className="sidebar">
+            <MoleculeControls
+              smiles={smiles}
+              setSmiles={setSmiles}
+              onProcess={processMolecule}
+              isLoading={isLoading}
             />
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="right-panel">
+        <div className="main-viewport">
           <MoleculeViewer
             pdbData={moleculeData?.pdb_string || ""}
             isLoading={isLoading}
           />
         </div>
+
+        {infoOpen && moleculeData && (
+          <div className="info-panel">
+            <div className="info-header">
+              <h3>Molecule Info</h3>
+              <button className="info-toggle" onClick={toggleInfo}>✕</button>
+            </div>
+            <MoleculeInfo
+              properties={moleculeData.properties}
+              imageData={moleculeData.image_data}
+            />
+          </div>
+        )}
+
+        {!infoOpen && moleculeData && (
+          <button className="info-toggle-button" onClick={toggleInfo}>
+            ℹ️
+          </button>
+        )}
       </main>
 
       {error && <div className="error-message">{error}</div>}

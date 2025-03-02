@@ -5,8 +5,11 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Molecular Viewer</title>
-    <script src="https://3dmol.org/build/3Dmol-min.js"></script>
-    <script src="https://3dmol.org/build/3Dmol.ui-min.js"></script>
+    <!-- Load jQuery first as 3DMol.js depends on it -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Load 3DMol.js with specific version -->
+    <script src="https://3dmol.org/build/3Dmol-min.js" type="text/javascript"></script>
+    <script src="https://3dmol.org/build/3Dmol.ui-min.js" type="text/javascript"></script>
   </head>
 
   <body>

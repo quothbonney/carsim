@@ -1,5 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import '../styles/MoleculeViewer.css';
+
+// No need to redeclare the Window interface here as it's defined in global.d.ts
 
 interface MoleculeViewerProps {
   pdbData: string;
@@ -9,26 +11,81 @@ interface MoleculeViewerProps {
 const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
   const viewerRef = useRef<HTMLDivElement>(null);
   const viewerInstanceRef = useRef<any>(null);
+  const [viewerError, setViewerError] = useState<string | null>(null);
+  const [initAttempts, setInitAttempts] = useState(0);
+  const [scriptsLoaded, setScriptsLoaded] = useState(false);
 
+  // Ensure scripts are loaded
   useEffect(() => {
-    // Load 3Dmol.js from CDN if it's not already loaded
-    if (!window.$3Dmol) {
-      const script = document.createElement('script');
-      script.src = 'https://3dmol.org/build/3Dmol-min.js';
-      script.async = true;
-      script.onload = () => {
-        console.log('3Dmol.js loaded successfully');
+    const loadScripts = async () => {
+      try {
+        // Check if jQuery is loaded
+        if (!window.jQuery) {
+          console.log('jQuery not loaded, loading it now');
+          const jqueryScript = document.createElement('script');
+          jqueryScript.src = 'https://code.jquery.com/jquery-3.6.0.min.js';
+          jqueryScript.async = true;
+          
+          // Create a promise to wait for script load
+          await new Promise((resolve, reject) => {
+            jqueryScript.onload = resolve;
+            jqueryScript.onerror = reject;
+            document.head.appendChild(jqueryScript);
+          });
+          
+          console.log('jQuery loaded successfully');
+        }
+        
+        // Check if 3DMol is loaded
+        if (!window.$3Dmol) {
+          console.log('3DMol.js not loaded, loading it now');
+          const threeDMolScript = document.createElement('script');
+          threeDMolScript.src = 'https://3dmol.org/build/3Dmol-min.js';
+          threeDMolScript.async = true;
+          
+          // Create a promise to wait for script load
+          await new Promise((resolve, reject) => {
+            threeDMolScript.onload = resolve;
+            threeDMolScript.onerror = reject;
+            document.head.appendChild(threeDMolScript);
+          });
+          
+          console.log('3DMol.js loaded successfully');
+        }
+        
+        setScriptsLoaded(true);
+      } catch (error) {
+        console.error('Error loading scripts:', error);
+        setViewerError(`Error loading required scripts: ${error}`);
+      }
+    };
+    
+    loadScripts();
+  }, []);
+
+  // Initialize the viewer when scripts are loaded
+  useEffect(() => {
+    if (!scriptsLoaded) return;
+    
+    console.log('Scripts loaded, attempting to initialize viewer');
+    
+    // Wait for DOM to be fully rendered
+    const initTimer = setTimeout(() => {
+      if (viewerRef.current && window.$3Dmol) {
+        console.log('DOM and 3DMol.js available, initializing viewer');
         initViewer();
-      };
-      script.onerror = () => {
-        console.error('Failed to load 3Dmol.js');
-      };
-      document.body.appendChild(script);
-    } else {
-      initViewer();
-    }
+      } else {
+        console.error('Cannot initialize viewer: DOM element or 3DMol.js not available, will retry');
+        if (initAttempts < 5) {
+          setInitAttempts(prev => prev + 1);
+        } else {
+          setViewerError('Cannot initialize viewer: DOM element or 3DMol.js not available after multiple attempts');
+        }
+      }
+    }, 1000);
 
     return () => {
+      clearTimeout(initTimer);
       // Clean up viewer when component unmounts
       if (viewerInstanceRef.current) {
         try {
@@ -38,83 +95,151 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
         }
       }
     };
-  }, []);
+  }, [initAttempts, scriptsLoaded]);
 
+  // This effect runs when pdbData changes
   useEffect(() => {
-    // Update the viewer when PDB data changes
-    if (pdbData && viewerInstanceRef.current && window.$3Dmol) {
-      try {
-        updateMolecule(pdbData);
-      } catch (e) {
-        console.error('Error updating molecule:', e);
-      }
+    if (!pdbData || !viewerInstanceRef.current || !window.$3Dmol) return;
+    
+    console.log('PDB data changed, updating molecule');
+    try {
+      updateMolecule(pdbData);
+    } catch (e) {
+      console.error('Error updating molecule:', e);
+      setViewerError(`Error updating molecule: ${e}`);
     }
   }, [pdbData]);
 
   const initViewer = () => {
-    if (!viewerRef.current || !window.$3Dmol) return;
+    if (!viewerRef.current) {
+      setViewerError('Cannot initialize viewer: DOM element not available');
+      return;
+    }
+
+    if (!window.$3Dmol) {
+      setViewerError('Cannot initialize viewer: 3DMol.js not available');
+      return;
+    }
 
     try {
-      console.log('Initializing 3Dmol viewer');
-      // Clear the container first
-      viewerRef.current.innerHTML = '';
+      console.log('Initializing 3DMol viewer');
       
-      // Create a new viewer instance
-      const viewer = window.$3Dmol.createViewer(viewerRef.current, {
-        backgroundColor: 'white',
+      // Make sure the container is empty
+      while (viewerRef.current.firstChild) {
+        viewerRef.current.removeChild(viewerRef.current.firstChild);
+      }
+      
+      // Set explicit dimensions to ensure the viewer is visible
+      viewerRef.current.style.width = '100%';
+      viewerRef.current.style.height = '100%';
+      
+      // Force a reflow to ensure dimensions are applied
+      void viewerRef.current.offsetHeight;
+      
+      // Get actual dimensions for logging
+      const actualWidth = viewerRef.current.clientWidth;
+      const actualHeight = viewerRef.current.clientHeight;
+      console.log(`Viewer container dimensions: ${actualWidth}x${actualHeight}`);
+      
+      if (actualWidth === 0 || actualHeight === 0) {
+        console.warn('Viewer container has zero dimensions, this may cause issues');
+      }
+      
+      // Create a new viewer instance with explicit config
+      const config = {
+        backgroundColor: '#1e1e2e', // Dark background like Blender
         antialias: true,
-        id: 'molecule-viewer'
-      });
+        id: 'molecule-viewer-' + Date.now(), // Unique ID to avoid conflicts
+      };
+      
+      console.log('Creating viewer with config:', config);
+      
+      // Create the viewer with explicit dimensions
+      const viewer = window.$3Dmol.createViewer(
+        viewerRef.current,
+        {
+          ...config,
+          width: actualWidth || 800,
+          height: actualHeight || 600
+        }
+      );
+      
+      if (!viewer) {
+        setViewerError('Failed to create 3DMol viewer');
+        return;
+      }
       
       viewerInstanceRef.current = viewer;
       
-      // Set initial view settings
-      viewer.setStyle({}, { stick: {} });
+      // Set initial view settings with more professional styling
+      viewer.setStyle({}, { 
+        stick: { radius: 0.15, colorscheme: 'cyanCarbon' },
+        sphere: { scale: 0.25 } 
+      });
+      viewer.setViewStyle({ style: "outline" });
       viewer.zoomTo();
       viewer.render();
       
-      console.log('3Dmol viewer initialized successfully');
+      console.log('3DMol viewer initialized successfully');
+      setViewerError(null);
       
       // If we already have PDB data, load it
       if (pdbData) {
+        console.log('Initial PDB data available, loading molecule');
         updateMolecule(pdbData);
       }
     } catch (e) {
-      console.error('Error initializing viewer:', e);
+      const error = `Error initializing viewer: ${e}`;
+      console.error(error);
+      setViewerError(error);
     }
   };
 
   const updateMolecule = (pdbData: string) => {
-    if (!viewerInstanceRef.current || !window.$3Dmol) return;
+    if (!viewerInstanceRef.current) {
+      console.error('Cannot update molecule: viewer not available');
+      return;
+    }
+    
+    if (!window.$3Dmol) {
+      console.error('Cannot update molecule: 3DMol.js not available');
+      return;
+    }
     
     try {
       const viewer = viewerInstanceRef.current;
       
-      // Clear any existing molecules
+      console.log('Clearing existing molecules');
       viewer.clear();
       
-      // Add the new molecule from PDB data
+      console.log('Adding new molecule from PDB data');
       viewer.addModel(pdbData, 'pdb');
       
-      // Set style and coloring
-      viewer.setStyle({}, { stick: {} });
-      viewer.setViewStyle({ style: 'outline' });
-      
-      // Add surface representation
-      viewer.addSurface(window.$3Dmol.SurfaceType.VDW, {
-        opacity: 0.7,
-        color: 'lightblue'
+      console.log('Setting molecule style');
+      viewer.setStyle({}, { 
+        stick: { radius: 0.15, colorscheme: 'cyanCarbon' },
+        sphere: { scale: 0.25 } 
       });
       
-      // Center and zoom to fit the molecule
+      // Add surface representation with a semi-transparent surface
+      console.log('Adding surface representation');
+      if (window.$3Dmol.SurfaceType) {
+        viewer.addSurface(window.$3Dmol.SurfaceType.VDW, {
+          opacity: 0.5,
+          color: 'lightblue'
+        });
+      }
+      
+      console.log('Zooming to fit molecule');
       viewer.zoomTo();
       
-      // Render the scene
+      console.log('Rendering scene');
       viewer.render();
       
       console.log('Molecule updated successfully');
     } catch (e) {
       console.error('Error updating molecule:', e);
+      setViewerError(`Error updating molecule: ${e}`);
     }
   };
 
@@ -131,16 +256,46 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
             </div>
           ) : (
             <div className="viewer-wrapper">
-              <div ref={viewerRef} className="viewer" id="molecule-viewer"></div>
+              <div 
+                ref={viewerRef} 
+                className="viewer" 
+                id="molecule-viewer"
+                style={{ width: '100%', height: '100%' }}
+              ></div>
+              
+              {viewerError && (
+                <div className="error-message">
+                  Error: {viewerError}
+                </div>
+              )}
+              
               <div className="viewer-controls">
-                <button onClick={() => viewerInstanceRef.current?.rotate(10, 'y')}>
-                  Rotate Y
+                <button onClick={() => {
+                  if (viewerInstanceRef.current) {
+                    viewerInstanceRef.current.rotate(10, 'y');
+                    viewerInstanceRef.current.render();
+                  }
+                }}>
+                  <span className="icon">⟲</span>
+                  <span className="label">Y</span>
                 </button>
-                <button onClick={() => viewerInstanceRef.current?.rotate(10, 'x')}>
-                  Rotate X
+                <button onClick={() => {
+                  if (viewerInstanceRef.current) {
+                    viewerInstanceRef.current.rotate(10, 'x');
+                    viewerInstanceRef.current.render();
+                  }
+                }}>
+                  <span className="icon">⟲</span>
+                  <span className="label">X</span>
                 </button>
-                <button onClick={() => viewerInstanceRef.current?.zoomTo()}>
-                  Reset View
+                <button onClick={() => {
+                  if (viewerInstanceRef.current) {
+                    viewerInstanceRef.current.zoomTo();
+                    viewerInstanceRef.current.render();
+                  }
+                }}>
+                  <span className="icon">⊕</span>
+                  <span className="label">Reset</span>
                 </button>
               </div>
             </div>
