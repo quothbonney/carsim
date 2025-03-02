@@ -1,0 +1,6 @@
+flask==2.3.3
+rdkit==2023.3.2
+Pillow==10.0.0
+gunicorn==21.2.0
+numpy<2
+flask-cors==4.0.0 
