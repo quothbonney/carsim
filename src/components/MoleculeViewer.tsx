@@ -36,6 +36,9 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
           console.log('jQuery loaded successfully');
         }
         
+        // Wait a moment after jQuery loads before loading 3DMol
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         // Check if 3DMol is loaded
         if (!window.$3Dmol) {
           console.log('3DMol.js not loaded, loading it now');
@@ -53,6 +56,8 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
           console.log('3DMol.js loaded successfully');
         }
         
+        // Wait a moment after 3DMol loads to ensure it's fully initialized
+        await new Promise(resolve => setTimeout(resolve, 1000));
         setScriptsLoaded(true);
       } catch (error) {
         console.error('Error loading scripts:', error);
@@ -61,6 +66,18 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
     };
     
     loadScripts();
+    
+    // Cleanup function
+    return () => {
+      // Clean up viewer when component unmounts
+      if (viewerInstanceRef.current) {
+        try {
+          viewerInstanceRef.current.clear();
+        } catch (e) {
+          console.error('Error cleaning up viewer:', e);
+        }
+      }
+    };
   }, []);
 
   // Initialize the viewer when scripts are loaded
@@ -82,18 +99,10 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
           setViewerError('Cannot initialize viewer: DOM element or 3DMol.js not available after multiple attempts');
         }
       }
-    }, 1000);
+    }, 2000); // Increased delay to 2 seconds
 
     return () => {
       clearTimeout(initTimer);
-      // Clean up viewer when component unmounts
-      if (viewerInstanceRef.current) {
-        try {
-          viewerInstanceRef.current.clear();
-        } catch (e) {
-          console.error('Error cleaning up viewer:', e);
-        }
-      }
     };
   }, [initAttempts, scriptsLoaded]);
 
@@ -131,7 +140,7 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
       
       // Set explicit dimensions to ensure the viewer is visible
       viewerRef.current.style.width = '100%';
-      viewerRef.current.style.height = '100%';
+      viewerRef.current.style.height = '400px'; // Set a fixed height
       
       // Force a reflow to ensure dimensions are applied
       void viewerRef.current.offsetHeight;
@@ -143,6 +152,9 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
       
       if (actualWidth === 0 || actualHeight === 0) {
         console.warn('Viewer container has zero dimensions, this may cause issues');
+        // Set minimum dimensions if container has zero size
+        viewerRef.current.style.width = '800px';
+        viewerRef.current.style.height = '600px';
       }
       
       // Create a new viewer instance with explicit config
@@ -156,7 +168,7 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
       
       // Create the viewer with explicit dimensions
       const viewer = window.$3Dmol.createViewer(
-        viewerRef.current,
+        window.jQuery ? window.jQuery(viewerRef.current) : viewerRef.current,
         {
           ...config,
           width: actualWidth || 800,
@@ -260,7 +272,7 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
                 ref={viewerRef} 
                 className="viewer" 
                 id="molecule-viewer"
-                style={{ width: '100%', height: '100%' }}
+                style={{ width: '100%', height: '400px' }} // Set fixed height here too
               ></div>
               
               {viewerError && (

@@ -45,9 +45,15 @@ declare namespace $3Dmol {
     rotate(angle: number, axis: string): void;
   }
 
-  function createViewer(element: HTMLElement, config: ViewerConfig): Viewer;
+  function createViewer(element: HTMLElement | JQuery, config: ViewerConfig): Viewer;
+}
+
+// Define jQuery
+interface JQuery {
+  [key: string]: any;
 }
 
 interface Window {
   $3Dmol: typeof $3Dmol;
+  jQuery: any;
 } 
