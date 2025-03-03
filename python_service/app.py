@@ -8,6 +8,7 @@ import tempfile
 import os
 import sys
 import logging
+from protein_analysis import ProteinAnalyzer
 
 # Configure logging
 logging.basicConfig(
@@ -21,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# Initialize the protein analyzer
+protein_analyzer = ProteinAnalyzer()
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -151,6 +155,108 @@ def convert_to_3d():
     except Exception as e:
         logger.error(f"Error converting SMILES to 3D: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/process', methods=['POST'])
+def process_molecule():
+    try:
+        data = request.json
+        smiles = data.get('smiles', '')
+        
+        if not smiles:
+            return jsonify({'error': 'No SMILES string provided'}), 400
+        
+        # Create a molecule from SMILES
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return jsonify({'error': 'Invalid SMILES string'}), 400
+        
+        # Add hydrogens
+        mol = Chem.AddHs(mol)
+        
+        # Generate 3D coordinates
+        AllChem.EmbedMolecule(mol, randomSeed=42)
+        AllChem.MMFFOptimizeMolecule(mol)
+        
+        # Convert to PDB format
+        pdb_string = Chem.MolToPDBBlock(mol)
+        
+        # Return PDB string and molecule info
+        return jsonify({
+            'pdb': pdb_string,
+            'num_atoms': mol.GetNumAtoms(),
+            'num_bonds': mol.GetNumBonds(),
+            'formula': Chem.rdMolDescriptors.CalcMolFormula(mol)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/analyze-pdb', methods=['POST'])
+def analyze_pdb():
+    """Analyze a PDB file and return structural information"""
+    try:
+        data = request.json
+        pdb_content = data.get('pdbContent', '')
+        
+        if not pdb_content:
+            return jsonify({'error': 'No PDB content provided'}), 400
+            
+        # Analyze the PDB content
+        result = protein_analyzer.analyze_pdb_content(pdb_content)
+        
+        # Return the analysis results
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/fetch-pdb/<pdb_id>', methods=['GET'])
+def fetch_pdb(pdb_id):
+    """Fetch a protein structure from the PDB database by ID"""
+    try:
+        if not pdb_id or len(pdb_id) != 4:
+            return jsonify({'error': 'Invalid PDB ID format. Should be 4 characters.'}), 400
+            
+        # Get the protein structure
+        result = protein_analyzer.get_protein_from_pdb_id(pdb_id)
+        
+        # Return the structure and analysis
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/binding-sites', methods=['POST'])
+def find_binding_sites():
+    """Find potential binding sites in a protein structure"""
+    try:
+        data = request.json
+        pdb_content = data.get('pdbContent', '')
+        distance_cutoff = data.get('distanceCutoff', 5.0)
+        
+        if not pdb_content:
+            return jsonify({'error': 'No PDB content provided'}), 400
+            
+        # Find binding sites
+        result = protein_analyzer.find_binding_sites(pdb_content, distance_cutoff)
+        
+        # Return the binding sites
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/status', methods=['GET'])
+def get_status():
+    """Get the status of the protein analysis service"""
+    biopython_available = protein_analyzer.is_available()
+    
+    return jsonify({
+        'status': 'ok',
+        'version': '1.0.0',
+        'biopython_available': biopython_available,
+        'rdkit_version': Chem.__version__
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
