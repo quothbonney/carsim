@@ -22,21 +22,15 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
   const [viewMode, setViewMode] = useState<'stick' | 'cartoon' | 'sphere' | 'line'>('stick');
   const [colorScheme, setColorScheme] = useState<string>('chainHetatm');
   
-  // Local PDB file loading
-  const [localPdbData, setLocalPdbData] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // PDB ID fetching
-  const [pdbId, setPdbId] = useState<string>('');
-  const [isFetchingPdb, setIsFetchingPdb] = useState(false);
   const [proteinAnalysis, setProteinAnalysis] = useState<any>(null);
   
   // Show protein analysis panel
   const [showAnalysis, setShowAnalysis] = useState(false);
-  
-  // Use either provided pdbData or localPdbData
-  const effectivePdbData = localPdbData || pdbData;
 
+  // Debug state to track molecule changes
+  const [moleculeCount, setMoleculeCount] = useState(0);
+  
   // Load 3DMol.js script once on mount
   useEffect(() => {
     const loadScript = () => {
@@ -70,111 +64,189 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
       const viewerDiv = document.createElement('div');
       viewerDiv.id = containerId.current;
       viewerDiv.style.width = '100%';
-      viewerDiv.style.height = '400px';
-      viewerDiv.style.position = 'relative';
+      viewerDiv.style.height = '100%';
+      viewerDiv.style.position = 'absolute';
+      viewerDiv.style.top = '0';
+      viewerDiv.style.left = '0';
       containerRef.current.appendChild(viewerDiv);
-
-      loadScript()
-        .then(() => {
-          // Initialize after script is loaded
-          console.log('Script loaded, initializing viewer');
-          setForceRender(prev => prev + 1);
-        })
-        .catch(err => {
-          setError(err.message);
-        });
+      
+      console.log('Viewer container created with ID:', containerId.current);
     }
 
+    // Load 3DMol.js and initialize viewer
+    loadScript()
+      .then(() => {
+        if (!containerRef.current) {
+          console.error('Container ref is null');
+          return;
+        }
+        
+        try {
+          console.log('Initializing 3DMol viewer...');
+          const viewerElement = document.getElementById(containerId.current);
+          
+          if (!viewerElement) {
+            console.error('Viewer element not found');
+            setError('Failed to initialize: viewer element not found');
+            return;
+          }
+          
+          console.log('Viewer element found:', viewerElement);
+          
+          const config = { backgroundColor: 'black' };
+          const viewer = window.$3Dmol.createViewer(
+            viewerElement,
+            config
+          );
+          
+          if (viewer) {
+            viewerRef.current = viewer;
+            setIsInitialized(true);
+            console.log('3DMol viewer initialized successfully');
+            
+            // If we have data, display it
+            if (pdbData) {
+              console.log('Initial PDB data available, displaying molecule');
+              displayMolecule(pdbData, viewer);
+            }
+          } else {
+            console.error('Failed to create viewer object');
+            setError('Failed to create 3D viewer');
+          }
+        } catch (err) {
+          console.error('Failed to initialize 3DMol viewer:', err);
+          setError('Failed to initialize molecular viewer');
+        }
+      })
+      .catch(err => {
+        console.error('Error in 3DMol.js setup:', err);
+        setError('Failed to load molecular viewer library');
+      });
+    
+    // Cleanup function
     return () => {
-      // Cleanup on unmount
       if (viewerRef.current) {
         try {
-          viewerRef.current.clear();
-        } catch (e) {
-          console.log('Error during cleanup:', e);
+          // Best effort to clean up viewer
+          viewerRef.current = null;
+        } catch (err) {
+          console.error('Error cleaning up 3DMol viewer:', err);
         }
       }
     };
   }, []);
-
-  // Create viewer instance
+  
+  // Re-setup the viewer if it's reloaded
   useEffect(() => {
-    if (!containerRef.current || forceRender === 0) return;
-
-    console.log(`Initializing viewer (force render: ${forceRender})`);
-    
-    // Clean up any existing viewer
-    if (viewerRef.current) {
+    if (forceRender > 0 && containerRef.current && typeof window.$3Dmol !== 'undefined') {
       try {
-        viewerRef.current.clear();
-      } catch (e) {
-        console.log('Error clearing existing viewer:', e);
-      }
-      viewerRef.current = null;
-    }
-
-    // Create new viewer with a slight delay
-    setTimeout(() => {
-      try {
-        if (typeof window.$3Dmol === 'undefined') {
-          setError('3DMol library not available');
+        console.log(`Reinitializing viewer (force render: ${forceRender})`);
+        const viewerElement = document.getElementById(containerId.current);
+        
+        if (!viewerElement) {
+          console.error('Viewer element not found during reload');
+          setError('Failed to reinitialize: viewer element not found');
           return;
         }
-
-        const element = document.getElementById(containerId.current);
-        if (!element) {
-          setError('Could not find viewer container element');
-          return;
-        }
-
-        console.log('Creating viewer instance');
-        // Create viewer with optimized settings that support future dynamics
-        const viewer = window.$3Dmol.createViewer(element, {
-          backgroundColor: '#1e1e2e',
-          antialias: true,
-          disableFog: false, // Enable fog for better depth perception (important for dynamics)
-          outline: false // Disable outline for performance
-        });
-
-        if (!viewer) {
-          setError('Failed to create 3DMol viewer');
-          return;
-        }
-
-        viewerRef.current = viewer;
-        setIsInitialized(true);
-        setError(null);
-
-        // If we have molecule data, display it immediately
-        if (effectivePdbData) {
-          console.log('Initial display of molecule');
-          displayMolecule(effectivePdbData, viewer);
+        
+        const config = { backgroundColor: 'black' };
+        const viewer = window.$3Dmol.createViewer(
+          viewerElement,
+          config
+        );
+        
+        if (viewer) {
+          viewerRef.current = viewer;
+          setIsInitialized(true);
+          modelRef.current = null; // Clear model reference
+          console.log('3DMol viewer reinitialized');
+          
+          // If we have data, redisplay it
+          if (pdbData) {
+            console.log('Re-displaying molecule after viewer reload');
+            displayMolecule(pdbData, viewer);
+          }
         }
       } catch (err) {
-        console.error('Error initializing viewer:', err);
-        setError(`Error initializing viewer: ${err}`);
+        console.error('Failed to reinitialize 3DMol viewer:', err);
+        setError('Failed to reinitialize molecular viewer');
       }
-    }, 100);
-  }, [forceRender]);
+    }
+  }, [forceRender, pdbData]);
 
   // Handle PDB data changes
   useEffect(() => {
-    if (!isInitialized || !viewerRef.current || !effectivePdbData) return;
+    if (!isInitialized || !viewerRef.current) return;
     
-    // If data changed, update the display
-    if (effectivePdbData !== lastPdbRef.current) {
-      console.log('PDB data changed, updating display');
-      lastPdbRef.current = effectivePdbData;
-      displayMolecule(effectivePdbData, viewerRef.current);
-      
-      // If no analysis yet, try to get it
-      if (!proteinAnalysis && localPdbData) {
-        analyzePdbData(localPdbData);
+    console.log('PDB data changed check, current length:', pdbData?.length);
+    console.log('Last PDB ref length:', lastPdbRef.current?.length);
+    
+    // Skip if same PDB as before or no data
+    if (pdbData === lastPdbRef.current) {
+      console.log('Same PDB data, skipping render');
+      return;
+    }
+    
+    // Update last PDB reference
+    lastPdbRef.current = pdbData;
+    
+    console.log('PDB data changed, updating viewer');
+    setMoleculeCount(prev => prev + 1);
+    
+    // Reset errors
+    setError(null);
+    
+    // Clear and reset the viewer on data change
+    if (viewerRef.current) {
+      try {
+        console.log('Clearing viewer');
+        viewerRef.current.clear();
+        modelRef.current = null;
+      } catch (e) {
+        console.error('Error clearing viewer:', e);
       }
     }
-  }, [effectivePdbData, isInitialized]);
+    
+    if (!pdbData) {
+      console.log('No PDB data, showing empty viewer');
+      if (viewerRef.current) {
+        viewerRef.current.render();
+      }
+      return;
+    }
+    
+    try {
+      // Display the molecule
+      console.log('Displaying new molecule');
+      displayMolecule(pdbData, viewerRef.current);
+      
+      // Analyze the PDB structure
+      analyzePdbData(pdbData).catch(err => {
+        console.error('Error analyzing PDB data:', err);
+      });
+    } catch (err) {
+      console.error('Error displaying PDB:', err);
+      setError(`Failed to display molecule: ${err}`);
+    }
+  }, [pdbData, isInitialized]);
 
-  // Analyze PDB data using the server
+  // Re-apply style when view mode changes
+  useEffect(() => {
+    if (isInitialized && viewerRef.current && modelRef.current) {
+      console.log('View mode changed, applying new style');
+      applyCurrentStyle();
+    }
+  }, [viewMode, colorScheme, isInitialized]);
+
+  // Update surface visibility when showSurface changes
+  useEffect(() => {
+    if (isInitialized && viewerRef.current && modelRef.current) {
+      console.log('Surface visibility changed');
+      updateSurfaceVisibility();
+    }
+  }, [showSurface, isInitialized]);
+
+  // Analyze PDB data for additional information
   const analyzePdbData = async (pdbContent: string) => {
     try {
       const response = await fetch('http://localhost:5000/analyze-pdb', {
@@ -186,217 +258,218 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
       });
       
       const data = await response.json();
-      if (!data.error) {
-        setProteinAnalysis(data);
+      
+      if (data.error) {
+        console.error('Error from server:', data.error);
+        return;
       }
+      
+      setProteinAnalysis(data);
+      console.log('Analysis data:', data);
     } catch (err) {
       console.error('Failed to analyze PDB:', err);
     }
   };
 
-  // Handle surface visibility changes
-  useEffect(() => {
-    if (!isInitialized || !viewerRef.current || !modelRef.current) return;
-    
-    try {
-      updateSurfaceVisibility();
-    } catch (e) {
-      console.error('Error updating surface:', e);
-    }
-  }, [showSurface, isInitialized]);
-
-  // Handle view mode changes
-  useEffect(() => {
-    if (!isInitialized || !viewerRef.current || !modelRef.current) return;
-    
-    try {
-      applyCurrentStyle();
-    } catch (e) {
-      console.error('Error updating view mode:', e);
-    }
-  }, [viewMode, colorScheme, isInitialized]);
-
-  // Main function to display the molecule
+  // Handle displaying the molecule in the viewer
   const displayMolecule = (data: string, viewer: any) => {
-    if (!viewer) return;
-    
     try {
-      console.log('Displaying molecule');
+      console.log('Displaying molecule, data length:', data.length);
       
-      // Clear any existing content
+      // Make sure the viewer is fully cleared
       viewer.clear();
-      viewer.removeAllModels();
+      viewer.removeAllLabels();
       viewer.removeAllShapes();
       viewer.removeAllSurfaces();
       
-      // Detect if the PDB data is a protein (check for CA atom patterns)
-      const isProtein = data.includes("CA") && (
-        data.includes("ALA") || data.includes("ARG") || data.includes("ASN") || 
-        data.includes("ASP") || data.includes("CYS") || data.includes("GLN") || 
-        data.includes("GLU") || data.includes("GLY") || data.includes("HIS") || 
-        data.includes("ILE") || data.includes("LEU") || data.includes("LYS") || 
-        data.includes("MET") || data.includes("PHE") || data.includes("PRO") || 
-        data.includes("SER") || data.includes("THR") || data.includes("TRP") || 
-        data.includes("TYR") || data.includes("VAL")
-      );
+      // First try to use the minimal rendering for large proteins
+      const didMinimalRendering = tryMinimalRendering(data, viewer);
       
-      // Parse and add the model - store reference for future modifications
-      const model = viewer.addModel(data, 'pdb', {
-        keepH: true, // Keep hydrogen atoms (important for dynamics)
-        assignBonds: true // Make sure bonds are properly detected
-      });
-      
-      // Store model reference for future modifications
-      modelRef.current = model;
-      
-      // If it's a protein, default to cartoon view
-      if (isProtein && viewMode === 'stick') {
-        setViewMode('cartoon');
-      }
-      
-      // Apply current styling
-      applyCurrentStyle();
-      
-      // Update surface based on current state
-      updateSurfaceVisibility();
-      
-      // Zoom to fit the molecule and render
-      viewer.zoomTo();
-      viewer.render();
-      
-      setError(null);
-    } catch (err) {
-      console.error('Error displaying molecule:', err);
-      setError(`Error displaying molecule: ${err}`);
-      
-      // If display fails, try minimal rendering
-      tryMinimalRendering(data, viewer);
-    }
-  };
-
-  // Apply the current style based on viewMode and colorScheme
-  const applyCurrentStyle = () => {
-    const viewer = viewerRef.current;
-    if (!viewer) return;
-    
-    // Clear previous styles
-    viewer.setStyle({}, {});
-    
-    // Apply selected style
-    switch (viewMode) {
-      case 'cartoon':
-        viewer.setStyle({}, { cartoon: { color: colorScheme } });
-        // Also show sticks for non-protein parts (ligands, etc.)
-        viewer.setStyle({hetflag: true}, { stick: { radius: 0.15, colorscheme: 'greenCarbon' } });
-        break;
-      case 'stick':
-        viewer.setStyle({}, { 
-          stick: { radius: 0.15, colorscheme: colorScheme === 'chainHetatm' ? 'cyanCarbon' : colorScheme },
-          sphere: { scale: 0.25 } 
-        });
-        break;
-      case 'sphere':
-        viewer.setStyle({}, { sphere: { scale: 0.6, colorscheme: colorScheme } });
-        break;
-      case 'line':
-        viewer.setStyle({}, { line: { colorscheme: colorScheme } });
-        break;
-    }
-    
-    viewer.render();
-  };
-
-  // Try minimal rendering if normal display fails
-  const tryMinimalRendering = (data: string, viewer: any) => {
-    setTimeout(() => {
-      try {
-        if (viewer) {
-          viewer.clear();
-          const model = viewer.addModel(data, 'pdb');
+      if (!didMinimalRendering) {
+        // For smaller molecules, or if minimal rendering failed, use full rendering
+        console.log('Using standard rendering');
+        
+        // Parse the data explicitly for better error handling
+        try {
+          const model = viewer.addModel(data, "pdb");
+          if (!model) {
+            console.error('Failed to add model to viewer');
+            setError('Failed to create molecular model');
+            return;
+          }
+          
           modelRef.current = model;
-          viewer.setStyle({}, { line: { width: 1.0 } });
+          
+          applyCurrentStyle();
+          
+          // Center and zoom
           viewer.zoomTo();
           viewer.render();
+          console.log('Model rendered successfully');
+        } catch (modelErr) {
+          console.error('Error creating model:', modelErr);
+          setError(`Error creating model: ${modelErr}`);
+          
+          // Try one more time with a simple model
+          viewer.clear();
+          const simpleModel = viewer.addModel(data, "pdb", {keepH: false, parseSettings: {singleModel: true}});
+          if (simpleModel) {
+            modelRef.current = simpleModel;
+            simpleModel.setStyle({}, {line:{}});
+            viewer.zoomTo();
+            viewer.render();
+            console.log('Used simple fallback model');
+          } else {
+            throw new Error('Failed to create model after multiple attempts');
+          }
         }
-      } catch (retryErr) {
-        console.error('Retry failed:', retryErr);
-        setForceRender(prev => prev + 1);
       }
-    }, 100);
+    } catch (err) {
+      console.error('Error in displayMolecule:', err);
+      setError(`Failed to display molecule: ${err}`);
+    }
   };
-
-  // Update surface visibility based on showSurface state
-  const updateSurfaceVisibility = () => {
-    const viewer = viewerRef.current;
-    if (!viewer) return;
+  
+  // Apply the current style settings to the molecule
+  const applyCurrentStyle = () => {
+    if (!viewerRef.current || !modelRef.current) return;
     
-    // Remove any existing surfaces
-    viewer.removeAllSurfaces();
-    
-    // Add surface if enabled
-    if (showSurface) {
+    try {
+      const viewer = viewerRef.current;
+      const model = modelRef.current;
+      
+      // Clear old styles
+      model.setStyle({}, {});
+      
+      // Apply new style based on view mode
+      switch (viewMode) {
+        case 'stick':
+          model.setStyle({}, { stick: {} });
+          break;
+        case 'cartoon':
+          model.setStyle({}, { cartoon: { color: colorScheme } });
+          // Also show ligands with sticks if in cartoon mode
+          model.setStyle({hetflag: true}, { stick: {} });
+          break;
+        case 'sphere':
+          model.setStyle({}, { sphere: {} });
+          break;
+        case 'line':
+          model.setStyle({}, { line: {} });
+          break;
+      }
+      
+      // Update surface if needed
+      updateSurfaceVisibility();
+      
+      // Re-render
+      viewer.render();
+    } catch (err) {
+      console.error('Error applying style:', err);
+      setError(`Failed to apply visualization style: ${err}`);
+    }
+  };
+  
+  // For large proteins, use a more efficient rendering approach
+  const tryMinimalRendering = (data: string, viewer: any) => {
+    if (data.length > 200000) { // If PDB is large (lowered threshold)
       try {
-        if (window.$3Dmol && window.$3Dmol.SurfaceType) {
-          viewer.addSurface(window.$3Dmol.SurfaceType.VDW, {
-            opacity: 0.5,
-            color: 'lightblue'
-          });
+        console.log('Using minimal rendering for large molecule');
+        const model = viewer.addModel(data, "pdb", { keepH: false });
+        if (!model) {
+          console.error('Failed to add model in minimal rendering');
+          return false;
         }
-      } catch (e) {
-        console.warn('Error adding surface:', e);
+        
+        modelRef.current = model;
+        
+        // For large proteins, default to cartoon representation
+        model.setStyle({}, { cartoon: { color: colorScheme } });
+        setViewMode('cartoon');
+        
+        // Add stick representation for ligands and important residues
+        model.setStyle({hetflag: true}, { stick: {} });
+        
+        viewer.zoomTo();
+        viewer.render();
+        console.log('Minimal rendering successful');
+        return true;
+      } catch (err) {
+        console.error('Minimal rendering failed, will try normal rendering:', err);
+        return false;
       }
     }
-    
-    // Re-render to apply changes
-    viewer.render();
+    return false;
   };
-
+  
+  // Toggle surface visibility
+  const updateSurfaceVisibility = () => {
+    if (!viewerRef.current || !modelRef.current) return;
+    
+    try {
+      const viewer = viewerRef.current;
+      
+      // Always remove all surfaces first to prevent stacking
+      viewer.removeAllSurfaces();
+      
+      if (showSurface) {
+        console.log('Adding surface');
+        const model = modelRef.current;
+        model.addSurface(window.$3Dmol.SurfaceType.VDW, {
+          opacity: 0.7,
+          color: colorScheme === 'spectrum' ? 'spectrum' : 'white'
+        });
+      }
+      
+      viewer.render();
+    } catch (err) {
+      console.error('Error updating surface:', err);
+    }
+  };
+  
   // Toggle surface visibility
   const toggleSurface = () => {
-    setShowSurface(prev => !prev);
+    setShowSurface(!showSurface);
   };
-
-  // Example of a function that could modify molecule structure
+  
+  // Rotate around specified bond
   const rotateBond = (atomIdx1: number, atomIdx2: number, angle: number) => {
-    // This would be implemented to allow bond rotation
-    // 3DMol.js allows for atom position manipulation
-    console.log(`Future feature: Rotate bond between atoms ${atomIdx1}-${atomIdx2} by ${angle} degrees`);
+    if (viewerRef.current && modelRef.current) {
+      modelRef.current.rotateSelected(atomIdx1, atomIdx2, angle, true);
+      viewerRef.current.render();
+    }
   };
-
-  // Handler functions for viewer controls
+  
+  // Rotate around Y axis
   const rotateY = () => {
     if (viewerRef.current) {
-      try {
-        viewerRef.current.rotate(10, 'y');
-        viewerRef.current.render();
-      } catch (e) {
-        console.error('Error rotating molecule:', e);
-      }
+      viewerRef.current.rotate(0, 1, 0, 0.5);
+      viewerRef.current.render();
     }
   };
-
+  
+  // Rotate around X axis
   const rotateX = () => {
     if (viewerRef.current) {
-      try {
-        viewerRef.current.rotate(10, 'x');
-        viewerRef.current.render();
-      } catch (e) {
-        console.error('Error rotating molecule:', e);
-      }
+      viewerRef.current.rotate(1, 0, 0, 0.5);
+      viewerRef.current.render();
     }
   };
-
+  
+  // Reset the view to default
   const resetView = () => {
     if (viewerRef.current) {
-      try {
-        viewerRef.current.zoomTo();
-        viewerRef.current.render();
-      } catch (e) {
-        console.error('Error resetting view:', e);
-      }
+      viewerRef.current.setView([]);
+      viewerRef.current.zoomTo();
+      viewerRef.current.render();
     }
   };
-
+  
+  // Toggle protein analysis panel
+  const toggleAnalysis = () => {
+    setShowAnalysis(!showAnalysis);
+  };
+  
   // Manual reload function
   const reloadViewer = () => {
     // Generate a new container ID to force DOM recreation
@@ -407,10 +480,15 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
       const viewerDiv = document.createElement('div');
       viewerDiv.id = containerId.current;
       viewerDiv.style.width = '100%';
-      viewerDiv.style.height = '400px';
+      viewerDiv.style.height = '100%';
+      viewerDiv.style.position = 'absolute';
+      viewerDiv.style.top = '0';
+      viewerDiv.style.left = '0';
       containerRef.current.appendChild(viewerDiv);
     }
     
+    // Reset state for complete reinitialization
+    modelRef.current = null;
     setForceRender(prev => prev + 1);
   };
 
@@ -423,151 +501,21 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
   const changeColorScheme = (scheme: string) => {
     setColorScheme(scheme);
   };
-
-  // Handle PDB file upload
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      if (content) {
-        setLocalPdbData(content);
-      }
-    };
-    reader.onerror = () => {
-      setError("Failed to read the uploaded file");
-    };
-    reader.readAsText(file);
-  };
-
-  // Trigger file input click
-  const triggerFileUpload = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  // Handle PDB ID fetch
-  const fetchPdbById = async () => {
-    if (!pdbId || pdbId.length !== 4) {
-      setError('PDB ID must be 4 characters long');
-      return;
-    }
-    
-    try {
-      setIsFetchingPdb(true);
-      setError(null);
-      
-      const response = await fetch(`http://localhost:5000/fetch-pdb/${pdbId}`);
-      const data = await response.json();
-      
-      if (data.error) {
-        setError(data.error);
-        return;
-      }
-      
-      if (data.pdbContent) {
-        setLocalPdbData(data.pdbContent);
-        setProteinAnalysis(data.analysis);
-      } else {
-        setError('Failed to fetch PDB structure');
-      }
-    } catch (err) {
-      setError(`Failed to fetch PDB: ${err}`);
-    } finally {
-      setIsFetchingPdb(false);
-    }
-  };
-
-  // Handle PDB ID input
-  const handlePdbIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPdbId(e.target.value.toUpperCase());
-  };
-
-  // Toggle analysis panel
-  const toggleAnalysis = () => {
-    setShowAnalysis(prev => !prev);
-  };
-
+  
   return (
     <div className="molecule-viewer-container">
-      <h2>CarsimMD</h2>
-      <div className="file-upload-bar">
-        <button onClick={triggerFileUpload} className="upload-button">
-          <span className="icon">📂</span>
-          <span className="label">Upload PDB</span>
-        </button>
-        <input 
-          type="file" 
-          ref={fileInputRef}
-          accept=".pdb" 
-          onChange={handleFileUpload}
-          style={{ display: 'none' }}
-        />
-        
-        <div className="pdb-id-input-container">
-          <input 
-            type="text" 
-            value={pdbId} 
-            onChange={handlePdbIdChange}
-            placeholder="PDB ID (e.g. 1CRN)" 
-            maxLength={4}
-            className="pdb-id-input"
-          />
-          <button 
-            onClick={fetchPdbById} 
-            disabled={isFetchingPdb || pdbId.length !== 4}
-            className="fetch-button"
-          >
-            <span className="icon">🔍</span>
-            <span className="label">Fetch</span>
-          </button>
-        </div>
-        
-        {localPdbData && (
-          <>
-            <div className="file-name">
-              {proteinAnalysis ? (
-                `PDB loaded: ${proteinAnalysis.totalResidues} residues, ${proteinAnalysis.totalAtoms} atoms`
-              ) : (
-                'PDB file loaded'
-              )}
-            </div>
-            <button 
-              onClick={() => {
-                setLocalPdbData(null);
-                setProteinAnalysis(null);
-              }} 
-              className="clear-button"
-            >
-              <span className="icon">✖</span>
-              <span className="label">Clear</span>
-            </button>
-            {proteinAnalysis && (
-              <button 
-                onClick={toggleAnalysis} 
-                className={showAnalysis ? "analysis-button active" : "analysis-button"}
-              >
-                <span className="icon">ℹ️</span>
-                <span className="label">Analysis</span>
-              </button>
-            )}
-          </>
-        )}
-      </div>
-      
-      {showAnalysis && proteinAnalysis && (
-        <div className="analysis-panel">
-          <h3>Protein Analysis</h3>
+      {proteinAnalysis && (
+        <div className={`analysis-panel ${showAnalysis ? 'active' : ''}`}>
+          <div className="analysis-header">
+            <h3>Protein Analysis</h3>
+            <button className="close-button" onClick={toggleAnalysis}>×</button>
+          </div>
           <div className="analysis-content">
-            <div className="analysis-item">
-              <strong>Total Residues:</strong> {proteinAnalysis.totalResidues}
-            </div>
-            <div className="analysis-item">
-              <strong>Total Atoms:</strong> {proteinAnalysis.totalAtoms}
-            </div>
+            {proteinAnalysis.residueCount && (
+              <div className="analysis-item">
+                <strong>Total residues:</strong> {proteinAnalysis.residueCount}
+              </div>
+            )}
             
             {proteinAnalysis.secondaryStructure && (
               <div className="analysis-item">
@@ -578,7 +526,7 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
                       <div 
                         className="ss-helix" 
                         style={{ 
-                          width: `${(proteinAnalysis.secondaryStructure.helix / proteinAnalysis.totalResidues) * 100}%` 
+                          width: `${(proteinAnalysis.secondaryStructure.helix / proteinAnalysis.residueCount) * 100}%`
                         }}
                         title={`Helix: ${proteinAnalysis.secondaryStructure.helix} residues`}
                       ></div>
@@ -587,7 +535,7 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
                       <div 
                         className="ss-sheet" 
                         style={{ 
-                          width: `${(proteinAnalysis.secondaryStructure.sheet / proteinAnalysis.totalResidues) * 100}%` 
+                          width: `${(proteinAnalysis.secondaryStructure.sheet / proteinAnalysis.residueCount) * 100}%`
                         }}
                         title={`Sheet: ${proteinAnalysis.secondaryStructure.sheet} residues`}
                       ></div>
@@ -596,7 +544,7 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
                       <div 
                         className="ss-loop" 
                         style={{ 
-                          width: `${(proteinAnalysis.secondaryStructure.loop / proteinAnalysis.totalResidues) * 100}%` 
+                          width: `${(proteinAnalysis.secondaryStructure.loop / proteinAnalysis.residueCount) * 100}%`
                         }}
                         title={`Loop: ${proteinAnalysis.secondaryStructure.loop} residues`}
                       ></div>
@@ -633,13 +581,13 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
         </div>
       )}
       
-      {isLoading || isFetchingPdb ? (
+      {isLoading ? (
         <div className="loading-indicator">
-          {isFetchingPdb ? 'Fetching PDB structure...' : 'Loading...'}
+          Loading...
         </div>
       ) : (
         <>
-          {!effectivePdbData ? (
+          {!pdbData ? (
             <div className="empty-state">
               Enter a SMILES string or upload a PDB file to view the 3D structure
             </div>
@@ -648,6 +596,7 @@ const MoleculeViewer = ({ pdbData, isLoading }: MoleculeViewerProps) => {
               <div 
                 ref={containerRef} 
                 className="viewer-container"
+                data-molecule-count={moleculeCount}
               ></div>
               
               {error && (

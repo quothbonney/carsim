@@ -3,11 +3,12 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  margin-bottom: 20px;
+  margin-bottom: 0;
   background-color: #1e1e2e;
   color: #fff;
   position: relative;
-  height: 500px; /* Fixed height to ensure controls are at bottom */
+  height: 97vh; /* Full viewport height */
+  overflow: hidden;
 }
 
 .molecule-viewer-container h2 {
@@ -33,13 +34,16 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow: hidden;
 }
 
 .viewer-container {
   width: 100%;
+  height: 100%;
   flex-grow: 1;
   background-color: #181825;
-  min-height: 400px;
+  min-height: calc(100vh - 60px); /* Subtract space for controls */
+  position: relative;
 }
 
 .error-message {
@@ -64,16 +68,21 @@
 
 .viewer-controls.fixed-bottom {
   position: absolute;
-  bottom: 0;
+  bottom: 20px;
   left: 0;
   right: 0;
-  background-color: rgba(24, 24, 37, 0.9);
+  background-color: rgba(24, 24, 37, 0.8);
   backdrop-filter: blur(5px);
   border-top: 1px solid #313244;
+  border-radius: 8px;
   z-index: 10;
   display: flex;
-  justify-content: space-around;
-  gap: 10px;
+  justify-content: center;
+  gap: 20px;
+  padding: 10px 0;
+  width: 90%;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .control-group {
@@ -87,13 +96,14 @@
   align-items: center;
   justify-content: center;
   margin: 0 5px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   background-color: #313244;
   color: #cdd6f4;
   border: 1px solid #45475a;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
+  font-size: 0.9rem;
 }
 
 .viewer-controls button:hover:not(:disabled) {
@@ -169,12 +179,7 @@
 }
 
 .file-upload-bar {
-  display: flex;
-  padding: 8px 15px;
-  background-color: #181825;
-  border-bottom: 1px solid #313244;
-  gap: 10px;
-  align-items: center;
+  display: none; /* Hide the original upload bar since we're moving it to the sidebar */
 }
 
 .upload-button {
@@ -289,36 +294,79 @@
 }
 
 .analysis-panel {
-  background-color: #1e1e2e;
-  border-bottom: 1px solid #45475a;
-  padding: 15px;
-  max-height: 200px;
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background-color: rgba(42, 42, 58, 0.85);
+  backdrop-filter: blur(5px);
+  border-radius: 6px;
+  width: 320px;
+  max-height: 80%;
   overflow-y: auto;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid #45475a;
+  transform: translateX(400px);
+  transition: transform 0.3s ease;
 }
 
-.analysis-panel h3 {
-  margin: 0 0 10px 0;
-  font-size: 1.1rem;
-  color: #f9e2af;
+.analysis-panel.active {
+  transform: translateX(0);
+}
+
+.analysis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #45475a;
+  background-color: rgba(49, 50, 68, 0.8);
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+}
+
+.analysis-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #cdd6f4;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: #cdd6f4;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.close-button:hover {
+  background-color: rgba(69, 71, 90, 0.5);
 }
 
 .analysis-content {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 15px;
+  padding: 15px;
 }
 
 .analysis-item {
-  background-color: #181825;
-  padding: 10px;
-  border-radius: 4px;
-  border-left: 3px solid #cba6f7;
+  margin-bottom: 15px;
+}
+
+.analysis-item:last-child {
+  margin-bottom: 0;
 }
 
 .analysis-item strong {
-  color: #f9e2af;
   display: block;
   margin-bottom: 5px;
+  color: #cdd6f4;
 }
 
 .secondary-structure {

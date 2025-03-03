@@ -129,18 +129,19 @@ button {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  width: 100vw;
   overflow: hidden;
+  background-color: var(--background-color);
 }
 
 .app-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: var(--header-color);
   padding: 0.5rem 1rem;
+  background-color: var(--header-color);
   border-bottom: 1px solid var(--border-color);
-  height: 3rem;
+  height: 48px;
+  z-index: 20;
 }
 
 .header-left {
@@ -208,6 +209,7 @@ button {
   flex: 1;
   overflow: hidden;
   position: relative;
+  height: calc(100vh - 48px);
 }
 
 .sidebar {
@@ -218,6 +220,8 @@ button {
   display: flex;
   flex-direction: column;
   z-index: 10;
+  padding: 0;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
 }
 
 .main-viewport {

@@ -26,6 +26,7 @@ function App() {
   const [smiles, setSmiles] = useState<string>("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [infoOpen, setInfoOpen] = useState(true);
+  const [uploadedPdbData, setUploadedPdbData] = useState<string | null>(null);
 
   // Start the Python service when the app loads
   useEffect(() => {
@@ -56,8 +57,15 @@ function App() {
 
     setIsLoading(true);
     setError(null);
+    
+    // Clear any existing PDB data
+    setUploadedPdbData(null);
+    setMoleculeData(null);
+    
     try {
       const result = await invoke<any>("process_smiles", { smiles: smilesInput });
+      
+      // Set new data
       setMoleculeData(result);
       console.log("Processed molecule data:", result);
     } catch (err) {
@@ -68,6 +76,19 @@ function App() {
     }
   };
 
+  const handlePdbUpload = (pdbData: string) => {
+    console.log("PDB data received in App component, length:", pdbData.length);
+    
+    // First clear current state
+    setUploadedPdbData(null);
+    setMoleculeData(null);
+    
+    // Then set new data after a short delay to ensure proper rerender
+    setTimeout(() => {
+      setUploadedPdbData(pdbData);
+    }, 10);
+  };
+
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
@@ -75,6 +96,14 @@ function App() {
   const toggleInfo = () => {
     setInfoOpen(!infoOpen);
   };
+
+  // Determine which PDB data to use - either from SMILES or uploaded
+  const effectivePdbData = uploadedPdbData || (moleculeData?.pdb_string || "");
+
+  console.log("Effective PDB data available:", 
+    uploadedPdbData ? "Uploaded PDB" : 
+    moleculeData?.pdb_string ? "SMILES-derived PDB" : 
+    "None");
 
   return (
     <div className="app-container">
@@ -103,13 +132,14 @@ function App() {
               setSmiles={setSmiles}
               onProcess={processMolecule}
               isLoading={isLoading}
+              onPdbUpload={handlePdbUpload}
             />
           </div>
         )}
 
         <div className="main-viewport">
           <MoleculeViewer
-            pdbData={moleculeData?.pdb_string || ""}
+            pdbData={effectivePdbData}
             isLoading={isLoading}
           />
         </div>

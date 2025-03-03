@@ -39,27 +39,56 @@ class ProteinAnalyzer:
     def analyze_pdb_content(self, pdb_content):
         """Analyze PDB content and return structural information"""
         if not BIOPYTHON_AVAILABLE:
-            return {"error": "BioPython is not installed. Install it with: pip install biopython"}
+            return {
+                "error": "BioPython is not installed. Install it with: pip install biopython"
+            }
             
         try:
-            # Write content to a temporary file
-            with tempfile.NamedTemporaryFile(suffix='.pdb', delete=False) as tmp:
-                tmp.write(pdb_content.encode('utf-8'))
-                tmp_path = tmp.name
+            # Create a temporary file to write the PDB content
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdb', mode='w') as f:
+                f.write(pdb_content)
+                temp_path = f.name
                 
             # Parse the PDB file
-            structure = self.parser.get_structure('protein', tmp_path)
+            parser = PDBParser(QUIET=True)
+            structure = parser.get_structure('protein', temp_path)
             
-            # Get basic statistics
-            stats = self._get_structure_stats(structure)
+            # Get the first model
+            model = structure[0]
+            
+            # Count residues and atoms
+            residue_count = sum(1 for _ in model.get_residues())
+            atom_count = sum(1 for _ in model.get_atoms())
+            
+            # Get chain information
+            chains = []
+            for chain in model:
+                chain_residues = list(chain.get_residues())
+                chains.append({
+                    "chainId": chain.id,
+                    "residueCount": len(chain_residues)
+                })
+            
+            # Try to calculate secondary structure with DSSP if available
+            secondary_structure = self._calculate_secondary_structure(model, temp_path)
             
             # Clean up the temporary file
-            os.unlink(tmp_path)
+            os.unlink(temp_path)
             
-            return stats
+            # Compile the analysis results
+            result = {
+                "residueCount": residue_count,
+                "atomCount": atom_count,
+                "chains": chains
+            }
+            
+            if secondary_structure:
+                result["secondaryStructure"] = secondary_structure
+                
+            return result
             
         except Exception as e:
-            return {"error": f"Failed to analyze PDB: {str(e)}"}
+            return {"error": f"Error analyzing PDB: {str(e)}"}
     
     def _get_structure_stats(self, structure):
         """Extract basic statistics from the structure"""

@@ -201,13 +201,22 @@ def analyze_pdb():
         if not pdb_content:
             return jsonify({'error': 'No PDB content provided'}), 400
             
+        logger.info("Analyzing PDB content of length %d", len(pdb_content))
+        
         # Analyze the PDB content
         result = protein_analyzer.analyze_pdb_content(pdb_content)
         
+        # Check if there was an error
+        if 'error' in result:
+            logger.error("Error analyzing PDB: %s", result['error'])
+            return jsonify(result), 400
+        
+        logger.info("PDB analysis complete")
         # Return the analysis results
         return jsonify(result)
         
     except Exception as e:
+        logger.exception("Exception in analyze_pdb: %s", str(e))
         return jsonify({'error': str(e)}), 500
 
 @app.route('/fetch-pdb/<pdb_id>', methods=['GET'])
@@ -217,13 +226,23 @@ def fetch_pdb(pdb_id):
         if not pdb_id or len(pdb_id) != 4:
             return jsonify({'error': 'Invalid PDB ID format. Should be 4 characters.'}), 400
             
+        logger.info("Fetching PDB with ID: %s", pdb_id)
+        
         # Get the protein structure
         result = protein_analyzer.get_protein_from_pdb_id(pdb_id)
+        
+        # Check if there was an error
+        if 'error' in result:
+            logger.error("Error fetching PDB %s: %s", pdb_id, result['error'])
+            return jsonify(result), 400
+            
+        logger.info("Successfully fetched PDB %s", pdb_id)
         
         # Return the structure and analysis
         return jsonify(result)
         
     except Exception as e:
+        logger.exception("Exception in fetch_pdb: %s", str(e))
         return jsonify({'error': str(e)}), 500
 
 @app.route('/binding-sites', methods=['POST'])
